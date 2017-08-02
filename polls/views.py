@@ -1,5 +1,5 @@
 from django.core import serializers
-from django.http import JsonResponse,HttpResponse
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 
 # Create your views here.
@@ -12,6 +12,9 @@ def index(request):
 
 
 def getQuestion(request):
-    questions = Question.objects.get(id=1)
-    return questions.json
+    q = Question()
+    q.question_text = 'ddd'
+    q.pub_date = '2017-01-22'
+    q.save()
 
+    return JsonResponse(q.json, safe=False)
