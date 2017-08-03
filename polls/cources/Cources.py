@@ -3,10 +3,10 @@ import execjs
 import re
 import json
 import sqlite3
+from polls.cources.models import *
+from pony.orm import *
 
 from bs4 import BeautifulSoup as bs
-
-from polls.models import Exam
 
 domin = 'http://zjxy.hnhhlearning.com'
 homeUrl = 'http://zjxy.hnhhlearning.com/Home'
@@ -20,7 +20,7 @@ s = requests.Session()
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36',
     'Referer': 'http://zjxy.hnhhlearning.com/Home',
-    'Cookie': 'UM_distinctid=15d41670c242e8-018e214f8a9803-30667808-fa000-15d41670c25380; ASP.NET_SessionId=vd44chsjthfgdogpbfw2rl4s; CNZZDATA1254133248=1011469955-1500039283-http%253A%252F%252Fzjpx.hnhhlearning.com%252F%7C1501603025; hbjyUsersCookieszjxy.hnhhlearning.com=615|615|2f047a1d01464cb3ac2facd6eb01f3aa; IsLoginUsersCookies_zjxy.hnhhlearning.comzjxy.hnhhlearning.com=IsLogin'
+    'Cookie': 'UM_distinctid=15d3a1359ff159-05935b50bfa855-30667808-1fa400-15d3a135a007fb; CNZZDATA1254133248=1818098270-1499915688-http%253A%252F%252Fzjpx.hnhhlearning.com%252F%7C1501126918; ASP.NET_SessionId=213v0roymn5cfvtyds01pmqg; hbjyUsersCookieszjxy.hnhhlearning.com=615|615|2f047a1d01464cb3ac2facd6eb01f3aa; IsLoginUsersCookies_zjxy.hnhhlearning.comzjxy.hnhhlearning.com=IsLogin'
 }
 
 # 登陆到home
@@ -134,17 +134,40 @@ def getsAnswers():
         saveAnswers(tr.select("td a")[0]['href'])
 
 
+# 从练习记录中获取考试答案,保存c到数据库中
+# def saveAnswers(examViewUrl):
+#     answersHomeData = s.get(domin + examViewUrl, headers=headers)
+#     answersHomeContent = bs(answersHomeData.content, 'lxml')
+#     examName = re.search(r'\b\w*', answersHomeContent.select('.exampaperbox h2')[0].text)[0]
+#     exam = Exam.objects.filter("name=" + examName)
+#     if (not exam.exists()):
+#         exam = Exam.objects.create(name=examName);
+#
+#     for idx, tr in enumerate(answersHomeContent.select(".examchoose table")):
+#         print(tr)
+
+
 # 从练习记录中获取考试答案,保存到数据库中
+@db_session
 def saveAnswers(examViewUrl):
     answersHomeData = s.get(domin + examViewUrl, headers=headers)
     answersHomeContent = bs(answersHomeData.content, 'lxml')
     examName = re.search(r'\b\w*', answersHomeContent.select('.exampaperbox h2')[0].text)[0]
-    exam = Exam.objects.filter("name=" + examName)
+    exam = select(p for p in Exam if p.name == examName)
     if (not exam.exists()):
-        exam = Exam.objects.create(name=examName);
+        exam = Exam(name=examName, testFinish=False)
+    else:
+        exam = exam.first()
+    for idx, tr in enumerate(answersHomeContent.select(".examchoose")):
+        queStr = str(re.search(r'、.*', tr.select('table span')[0].text)[0])[1:]
 
-    for idx, tr in enumerate(answersHomeContent.select(".examchoose table")):
-        print(tr)
+        que = select(p for p in Question if p.name == queStr)
+        if (not que.exists()):
+            que = Question(name=queStr, outId=tr.attrs['id'], exam=exam)
+            ans = str(re.search('参考答案：.*\w', tr.text)[0])[len('参考答案：'):]
+            for an in ans.split("、"):
+                Answer(value=an, question=que)
+        commit()
 
 
 if __name__ == '__main__':
