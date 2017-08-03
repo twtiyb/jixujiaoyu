@@ -2,7 +2,7 @@ import requests
 import execjs
 import re
 import json
-import sqlite3
+import time
 from polls.cources.models import *
 from pony.orm import *
 
@@ -13,6 +13,14 @@ homeUrl = 'http://zjxy.hnhhlearning.com/Home'
 learningUrl = 'http://zjxy.hnhhlearning.com/Study/Learning?'
 learningMediaLiUrl = 'http://zjxy.hnhhlearning.com/Study/Learning/MediaLi?'
 testHistory = 'http://zjxy.hnhhlearning.com/Study/ExamList/TestHistory'
+testIndex = 'http://zjxy.hnhhlearning.com/Study/ExamList/TestIndex'
+
+passExam = 'http://zjxy.hnhhlearning.com/Study/Exam?epaId='
+sumbQuestion = 'http://zjxy.hnhhlearning.com/Study/Exam/SubmitExam'
+sumbExam = 'http://zjxy.hnhhlearning.com/Study/Exam?epaId='
+
+# formalPassExam =
+
 
 s = requests.Session()
 
@@ -20,7 +28,7 @@ s = requests.Session()
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36',
     'Referer': 'http://zjxy.hnhhlearning.com/Home',
-    'Cookie': 'UM_distinctid=15d3a1359ff159-05935b50bfa855-30667808-1fa400-15d3a135a007fb; CNZZDATA1254133248=1818098270-1499915688-http%253A%252F%252Fzjpx.hnhhlearning.com%252F%7C1501126918; ASP.NET_SessionId=213v0roymn5cfvtyds01pmqg; hbjyUsersCookieszjxy.hnhhlearning.com=615|615|2f047a1d01464cb3ac2facd6eb01f3aa; IsLoginUsersCookies_zjxy.hnhhlearning.comzjxy.hnhhlearning.com=IsLogin'
+    'Cookie': 'UM_distinctid=15d41670c242e8-018e214f8a9803-30667808-fa000-15d41670c25380; ASP.NET_SessionId=vd44chsjthfgdogpbfw2rl4s; hbjyUsersCookieszjxy.hnhhlearning.com=615|615|2f047a1d01464cb3ac2facd6eb01f3aa; IsLoginUsersCookies_zjxy.hnhhlearning.comzjxy.hnhhlearning.com=IsLogin; menu_bind=82650718c1d54939b7555b0fbcfb40dc; CNZZDATA1254133248=1011469955-1500039283-http%253A%252F%252Fzjpx.hnhhlearning.com%252F%7C1501765524'
 }
 
 # 登陆到home
@@ -134,25 +142,14 @@ def getsAnswers():
         saveAnswers(tr.select("td a")[0]['href'])
 
 
-# 从练习记录中获取考试答案,保存c到数据库中
-# def saveAnswers(examViewUrl):
-#     answersHomeData = s.get(domin + examViewUrl, headers=headers)
-#     answersHomeContent = bs(answersHomeData.content, 'lxml')
-#     examName = re.search(r'\b\w*', answersHomeContent.select('.exampaperbox h2')[0].text)[0]
-#     exam = Exam.objects.filter("name=" + examName)
-#     if (not exam.exists()):
-#         exam = Exam.objects.create(name=examName);
-#
-#     for idx, tr in enumerate(answersHomeContent.select(".examchoose table")):
-#         print(tr)
-
 
 # 从练习记录中获取考试答案,保存到数据库中
 @db_session
 def saveAnswers(examViewUrl):
     answersHomeData = s.get(domin + examViewUrl, headers=headers)
     answersHomeContent = bs(answersHomeData.content, 'lxml')
-    examName = re.search(r'\b\w*', answersHomeContent.select('.exampaperbox h2')[0].text)[0]
+    examName = str(re.search(r'\b\w*', answersHomeContent.select('.exampaperbox h2')[0].text)[0])
+    examName = examName.strip()
     exam = select(p for p in Exam if p.name == examName)
     if (not exam.exists()):
         exam = Exam(name=examName, testFinish=False)
@@ -160,17 +157,52 @@ def saveAnswers(examViewUrl):
         exam = exam.first()
     for idx, tr in enumerate(answersHomeContent.select(".examchoose")):
         queStr = str(re.search(r'、.*', tr.select('table span')[0].text)[0])[1:]
-
+        queStr = queStr.strip()
         que = select(p for p in Question if p.name == queStr)
         if (not que.exists()):
             que = Question(name=queStr, outId=tr.attrs['id'], exam=exam)
-            ans = str(re.search('参考答案：.*\w', tr.text)[0])[len('参考答案：'):]
-            for an in ans.split("、"):
+            tempStr =re.sub('\s*','',tr.select('div')[0].text)
+            ans = str(re.search('参考答案：.*\w', tempStr)[0])[len('参考答案：'):]
+            for an in ans.split(","):
+                an = an.strip()
                 Answer(value=an, question=que)
         commit()
 
+# 通过练习的考试
+def passTestExam(epaId):
+    examData = s.get(passExam + epaId, headers=headers)
+    examContent = bs(examData.content, 'lxml')
+    for idx, tr in enumerate(examContent.select(".examchoose")):
+        pushParams = []
+        pushParams.append({
+            'pagerId' : epaId ,
+            'qusetionId':tr.attrs['id'],
+            'ver':int(time.time()),
+            'isSubmit':False})
+        subQuesData = s.post(sumbQuestion,params=pushParams,headers=headers)
+        print(subQuesData)
+
+    print()
+
+# 获取练习的试卷
+def getTestExam():
+    answersHomeData = s.get(testIndex, headers=headers)
+    answersHomeContent = bs(answersHomeData.content, 'lxml')
+    for idx, tr in enumerate(answersHomeContent.select("#tabs-1 .listtable tbody tr")):
+        createPaperData = s.post(domin + tr.select("td a")[0]['href'] + "&type=Create", headers=headers)
+        createPaperData = s.get(domin + tr.select("td a")[0]['href'], headers=headers)
+        createPaperContent = bs(createPaperData.content, 'lxml')
+        hrefStr = createPaperContent.select('.enterxz a')[0].attrs['href']
+        epaId = hrefStr[hrefStr.index('=')+1:]
+        passTestExam(epaId)
+
+# 通过正式的考虑
+def passFormalExam():
+    print()
 
 if __name__ == '__main__':
-    getsAnswers()
+    # getsAnswers()
     # createSqliteDb();
-    print()
+    getTestExam()
+
+    print(int(time.time()))
