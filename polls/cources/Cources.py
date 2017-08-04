@@ -28,7 +28,7 @@ s = requests.Session()
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36',
     'Referer': 'http://zjxy.hnhhlearning.com/Home',
-    'Cookie': 'UM_distinctid=15d41670c242e8-018e214f8a9803-30667808-fa000-15d41670c25380; ASP.NET_SessionId=vd44chsjthfgdogpbfw2rl4s; hbjyUsersCookieszjxy.hnhhlearning.com=615|615|2f047a1d01464cb3ac2facd6eb01f3aa; IsLoginUsersCookies_zjxy.hnhhlearning.comzjxy.hnhhlearning.com=IsLogin; menu_bind=82650718c1d54939b7555b0fbcfb40dc; CNZZDATA1254133248=1011469955-1500039283-http%253A%252F%252Fzjpx.hnhhlearning.com%252F%7C1501765524'
+    'Cookie': 'UM_distinctid=15d3a1359ff159-05935b50bfa855-30667808-1fa400-15d3a135a007fb; ASP.NET_SessionId=213v0roymn5cfvtyds01pmqg; CNZZDATA1254133248=1818098270-1499915688-http%253A%252F%252Fzjpx.hnhhlearning.com%252F%7C1501756428; hbjyUsersCookieszjxy.hnhhlearning.com=615|615|2f047a1d01464cb3ac2facd6eb01f3aa; IsLoginUsersCookies_zjxy.hnhhlearning.comzjxy.hnhhlearning.com=IsLogin'
 }
 
 # 登陆到home
@@ -160,7 +160,7 @@ def saveAnswers(examViewUrl):
         queStr = queStr.strip()
         que = select(p for p in Question if p.name == queStr)
         if (not que.exists()):
-            que = Question(name=queStr, outId=tr.attrs['id'], exam=exam)
+            que = Question(name=queStr, outId=tr.attrs['id'][len('Question_'):], exam=exam)
             tempStr =re.sub('\s*','',tr.select('div')[0].text)
             ans = str(re.search('参考答案：.*\w', tempStr)[0])[len('参考答案：'):]
             for an in ans.split(","):
@@ -172,13 +172,20 @@ def saveAnswers(examViewUrl):
 def passTestExam(epaId):
     examData = s.get(passExam + epaId, headers=headers)
     examContent = bs(examData.content, 'lxml')
+    postHeader = {
+
+    }
     for idx, tr in enumerate(examContent.select(".examchoose")):
-        pushParams = []
-        pushParams.append({
+        pushParams = {
             'pagerId' : epaId ,
-            'qusetionId':tr.attrs['id'],
+            'qusetionId':tr.attrs['id'][len('Question_'):],
             'ver':int(time.time()),
-            'isSubmit':False})
+            'passage':'false',
+            'isSubmit':'false'}
+        #判断题  true ,false
+        #单选题  0,1,2
+        #多选题 false&true&true&false
+        #todo 要拿答案里边跟这里做匹配,提交时按这个格式来提交
         subQuesData = s.post(sumbQuestion,params=pushParams,headers=headers)
         print(subQuesData)
 
@@ -196,13 +203,33 @@ def getTestExam():
         epaId = hrefStr[hrefStr.index('=')+1:]
         passTestExam(epaId)
 
-# 通过正式的考虑
+# 通过正式的考试
 def passFormalExam():
     print()
 
-if __name__ == '__main__':
-    # getsAnswers()
-    # createSqliteDb();
-    getTestExam()
 
-    print(int(time.time()))
+
+# 登陆
+def login(passId,password):
+    loginUrl = 'http://zjpx.hnhhlearning.com/Home/Login/DoHnzjLogin'
+    response = requests.get(loginUrl);
+    soup = bs(response.text, 'lxml')
+
+
+    account = {'LoginAccount': '41052619900221006X',
+               'LoginPassword': '000000',
+               'LoginValCode': '04337',
+               'LoginType': '0',
+               'HnzjLoginTab': '0',
+               'X-Requested-With': 'XMLHttpRequest'
+               }
+    response = requests.get(loginUrl, account,response.headers)
+
+
+
+    soup.select('#id1')
+
+
+if __name__ == '__main__':
+    getsAnswers()
+    # getTestExam()
