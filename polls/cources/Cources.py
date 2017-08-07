@@ -14,6 +14,7 @@ learningUrl = 'http://zjxy.hnhhlearning.com/Study/Learning?'
 learningMediaLiUrl = 'http://zjxy.hnhhlearning.com/Study/Learning/MediaLi?'
 testHistory = 'http://zjxy.hnhhlearning.com/Study/ExamList/TestHistory'
 testIndex = 'http://zjxy.hnhhlearning.com/Study/ExamList/TestIndex'
+formalIndex = 'http://zjxy.hnhhlearning.com/Study/ExamList/Index'
 
 passExam = 'http://zjxy.hnhhlearning.com/Study/Exam?epaId='
 sumbQuestion = 'http://zjxy.hnhhlearning.com/Study/Exam/SubmitExam'
@@ -22,23 +23,26 @@ sumbExam = 'http://zjxy.hnhhlearning.com/Study/Exam?epaId='
 # formalPassExam =
 
 
-s = requests.Session()
+s = requests.session()
 
-# 构造header头
+# # 构造header头
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36',
-    'Referer': 'http://zjxy.hnhhlearning.com/Home',
-    'Cookie': 'UM_distinctid=15d3a1359ff159-05935b50bfa855-30667808-1fa400-15d3a135a007fb; ASP.NET_SessionId=213v0roymn5cfvtyds01pmqg; CNZZDATA1254133248=1818098270-1499915688-http%253A%252F%252Fzjpx.hnhhlearning.com%252F%7C1501756428; hbjyUsersCookieszjxy.hnhhlearning.com=615|615|2f047a1d01464cb3ac2facd6eb01f3aa; IsLoginUsersCookies_zjxy.hnhhlearning.comzjxy.hnhhlearning.com=IsLogin'
+    'Referer': 'http://zjpy.hnhhlearning.com/',
+    'Cookie':'ASP.NET_SessionId=ryu3fx4wg31f3vu20lpccxtc;hbjyUsersCookieszjxy.hnhhlearning.com=615|615|2f047a1d01464cb3ac2facd6eb01f3aa; IsLoginUsersCookies_zjxy.hnhhlearning.comzjxy.hnhhlearning.com=IsLogin'
 }
+s.headers = headers
+
+
 
 # 登陆到home
-homeData = s.get(homeUrl, headers=headers)
+homeData = s.get('http://zjpx.hnhhlearning.com/')
 homeContent = bs(homeData.content, 'lxml')
 
 
 # 获取子课程
 def getChildCources(sscId):
-    courceData = s.get(learningUrl + 'sscId=' + sscId, headers=headers)
+    courceData = s.get(learningUrl + 'sscId=' + sscId)
     courceContent = bs(courceData.content, 'lxml')
 
     child_cources_list = []
@@ -82,7 +86,7 @@ def getMainCources(homeContent):
 
 # 提交进度
 def pushPercent(sscId, medId):
-    courceData = s.get(learningMediaLiUrl + 'sscId=' + sscId + '&medId=' + medId, headers=headers)
+    courceData = s.get(learningMediaLiUrl + 'sscId=' + sscId + '&medId=' + medId)
     courceContent = bs(courceData.content, 'lxml')
 
     # 获取pushPercent参数
@@ -106,7 +110,7 @@ def pushPercent(sscId, medId):
     # 拼接参数
     # type == 2 代表开始
     pushParams['Type'] = 2
-    courceData = s.get(pushUrl + 'sscId=' + sscId + '&medId=' + medId, params=pushParams, headers=headers)
+    courceData = s.get(pushUrl + 'sscId=' + sscId + '&medId=' + medId, params=pushParams)
     testStr = courceData.text
     result = json.loads(re.search('\((\S*)\)', testStr)[1]);
 
@@ -115,7 +119,7 @@ def pushPercent(sscId, medId):
     # type == 1 代表持续,类似于心跳...网站这里必须是先开始,然后再发心跳,才能增加进度.所以先要设置成2请求一次,再设置成1持续请求
     pushParams['Type'] = 1
     while (result['Value']['Process'] < 100):
-        courceData = s.get(pushUrl + 'sscId=' + sscId + '&medId=' + medId, params=pushParams, headers=headers)
+        courceData = s.get(pushUrl + 'sscId=' + sscId + '&medId=' + medId, params=pushParams)
         testStr = courceData.text
         result = json.loads(re.search('\((\S*)\)', testStr)[1]);
         print('完成' + str(result['Value']['Process']))
@@ -136,17 +140,17 @@ def learn():
 
 # 从练习记录中获取考试答案,保存到数据库中
 def getsAnswers():
-    answersHomeData = s.get(testHistory, headers=headers)
+    answersHomeData = s.get(testHistory,headers = headers)
+    # answersHomeData = s.get(testHistory)
     answersHomeContent = bs(answersHomeData.content, 'lxml')
     for idx, tr in enumerate(answersHomeContent.select("#tabs-1 .listtable tbody tr")):
         saveAnswers(tr.select("td a")[0]['href'])
 
 
-
 # 从练习记录中获取考试答案,保存到数据库中
 @db_session
 def saveAnswers(examViewUrl):
-    answersHomeData = s.get(domin + examViewUrl, headers=headers)
+    answersHomeData = s.get(domin + examViewUrl)
     answersHomeContent = bs(answersHomeData.content, 'lxml')
     examName = str(re.search(r'\b\w*', answersHomeContent.select('.exampaperbox h2')[0].text)[0])
     examName = examName.strip()
@@ -161,75 +165,124 @@ def saveAnswers(examViewUrl):
         que = select(p for p in Question if p.name == queStr)
         if (not que.exists()):
             que = Question(name=queStr, outId=tr.attrs['id'][len('Question_'):], exam=exam)
-            tempStr =re.sub('\s*','',tr.select('div')[0].text)
+            tempStr = re.sub('\s*', '', tr.select('div')[0].text)
             ans = str(re.search('参考答案：.*\w', tempStr)[0])[len('参考答案：'):]
             for an in ans.split(","):
                 an = an.strip()
-                Answer(value=an, question=que)
+                Answer(value=re.sub('[A-Z]+', '', an.strip()), outId=que.outId, question=que)
         commit()
+
 
 # 通过练习的考试
 def passTestExam(epaId):
-    examData = s.get(passExam + epaId, headers=headers)
+    examData = s.get(passExam + epaId)
     examContent = bs(examData.content, 'lxml')
     postHeader = {
 
     }
     for idx, tr in enumerate(examContent.select(".examchoose")):
-        pushParams = {
-            'pagerId' : epaId ,
-            'qusetionId':tr.attrs['id'][len('Question_'):],
-            'ver':int(time.time()),
-            'passage':'false',
-            'isSubmit':'false'}
-        #判断题  true ,false
-        #单选题  0,1,2
-        #多选题 false&true&true&false
-        #todo 要拿答案里边跟这里做匹配,提交时按这个格式来提交
-        subQuesData = s.post(sumbQuestion,params=pushParams,headers=headers)
-        print(subQuesData)
+        submitAnswer(epaId, tr.attrs['id'][len('Question_'):], int(tr.attrs['questiontype']), tr)
 
-    print()
 
-# 获取练习的试卷
-def getTestExam():
-    answersHomeData = s.get(testIndex, headers=headers)
+@db_session
+def submitAnswer(epaId, questionId, questionType, tr):
+    pushParams = {
+        'pagerId': epaId,
+        'qusetionId': questionId,
+        'ver': int(time.time()),
+        'passage': '',
+        'isSubmit': 'false'}
+    ansQu = select(p for p in Answer if p.outId == questionId)
+    if (not ansQu.exists()):
+        return
+    if questionType == 1:
+        if (str(ansQu.first().value).find('正确') > -1):
+            pushParams['passage'] = 'true'
+        else:
+            pushParams['passage'] = 'false'
+    elif questionType == 2:
+        for idx, trr in enumerate(tr.select("tr")):
+            if (trr.text.find(ansQu.first().value) > -1):
+                pushParams['passage'] = idx
+                break;
+    elif questionType == 3:
+        ans = []
+        for idx, trr in enumerate(tr.select("tr")):
+            tempStr = False
+            for an in ansQu:
+                if (trr.text.find(an.value) > -1):
+                    tempStr = True
+
+            ans.append('true' if tempStr else 'false')
+        pushParams['passage'] = '$$'.join(ans)
+    subQuesData = s.post(sumbQuestion, params=pushParams)
+    print(pushParams)
+    print(subQuesData.text)
+
+
+# 考试
+def subExam(formalExam=False):
+    answersHomeData = s.get(formalIndex if formalExam else testIndex)
     answersHomeContent = bs(answersHomeData.content, 'lxml')
     for idx, tr in enumerate(answersHomeContent.select("#tabs-1 .listtable tbody tr")):
-        createPaperData = s.post(domin + tr.select("td a")[0]['href'] + "&type=Create", headers=headers)
-        createPaperData = s.get(domin + tr.select("td a")[0]['href'], headers=headers)
+        createPaperData = s.post(domin + tr.select("td a")[0]['href'] + "&type=Create")
+        createPaperData = s.get(domin + tr.select("td a")[0]['href'])
         createPaperContent = bs(createPaperData.content, 'lxml')
         hrefStr = createPaperContent.select('.enterxz a')[0].attrs['href']
-        epaId = hrefStr[hrefStr.index('=')+1:]
+        epaId = hrefStr[hrefStr.index('=') + 1:]
         passTestExam(epaId)
 
-# 通过正式的考试
-def passFormalExam():
-    print()
 
+
+
+# todo 暂时用别人的服务代替,后续自己架识别服务.
+def getCaptcha(url):
+    # 'rb'要加,编码问题
+    # 从本地上传
+    #  files = {'file':('pic.jpg',open('/user/xxxx.jpg','rb'),'image/jpeg')}
+    # 直接读取验证码
+    imageFile = s.get(url, stream=True)
+    return imageFile.cookies.get('ValidateSessionName')
+
+    # 发现这网站直接把验证码给返回了...
+    # files = {'file': ('pic.jpg', imageFile.content, 'image/jpeg')}
+    # r = requests.post('http://chongdata.com/ocr/upload_file.php', files=files)
+    # while (True):
+    #     time.sleep(2)
+    #     captcha = requests.get('http://chongdata.com/ocr/' + re.search('url=\S*', r.text)[0][4:])
+    #     if (captcha.text.find('识别结果') > -1):
+    #         captcha = re.search('识别结果.*', bs(captcha.text, 'lxml').select('body')[0].text)[0]
+    #         return int(re.search('[0-9]+', captcha)[0])
 
 
 # 登陆
-def login(passId,password):
+def login(passId, password):
     loginUrl = 'http://zjpx.hnhhlearning.com/Home/Login/DoHnzjLogin'
-    response = requests.get(loginUrl);
-    soup = bs(response.text, 'lxml')
-
-
+    code = getCaptcha(
+        'http://zjpx.hnhhlearning.com/Public/Control/GetValidateCode?time=' + str(int(time.time())))
     account = {'LoginAccount': '41052619900221006X',
                'LoginPassword': '000000',
-               'LoginValCode': '04337',
+               'LoginValCode': code,
                'LoginType': '0',
                'HnzjLoginTab': '0',
                'X-Requested-With': 'XMLHttpRequest'
                }
-    response = requests.get(loginUrl, account,response.headers)
+    response = s.post(loginUrl, params=account)
+    response = s.get('http://zjpx.hnhhlearning.com/Public/ShareSso/ToStudy')
 
+    #json.dumps(session.cookies.get_dict()))  # 保存
+    #session.cookies.update(json.loads(f.read()))  # 读取
+    
+    print('登陆成功' + response.text)
 
-
-    soup.select('#id1')
 
 
 if __name__ == '__main__':
+    login('x', '000000')
+
+    # #获取答案
     getsAnswers()
-    # getTestExam()
+    # #正式考试
+    # subExam(True)
+
+    print()
