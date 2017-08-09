@@ -8,7 +8,9 @@ import json
 
 
 def index(request):
-    return HttpResponse("Hello, world. You're at the polls index.")
+    context = {}
+    context['hellow'] = 'hellow world.'
+    return render(request,'polls/index.html',context)
 
 
 def getQuestion(request):

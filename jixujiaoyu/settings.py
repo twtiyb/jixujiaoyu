@@ -56,7 +56,8 @@ ROOT_URLCONF = 'jixujiaoyu.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        # 就不能有个默认值吗...看了半天都没有看到明确说要写的..官方例子也没有说要写.
+        'DIRS': ['templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -120,3 +121,6 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.11/howto/static-files/
 
 STATIC_URL = '/static/'
+
+# 妈蛋,死活没有讲到需要单独去写 STATICFILES_DIRS .跟上边的TEMPLATES里的 dirs标签一样...妈蛋你都不能有个默认值吗...都需要自己直接写..
+STATICFILES_DIRS = ['static']
