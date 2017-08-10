@@ -17,8 +17,14 @@ class Question(db.Entity):
 
 class Answer(db.Entity):
     id = PrimaryKey(int,auto=True)
+    outId = Required(str)
     value = Required(str)
     question = Required(Question)
+
+class User(db.Entity):
+    id = PrimaryKey(int,auto=True)
+    passId = Required(str)
+    password = Required(str)
 
 
 
