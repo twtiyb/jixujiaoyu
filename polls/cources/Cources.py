@@ -36,7 +36,7 @@ s.headers = headers
 
 
 # 登陆到home
-homeData = s.get('http://zjpx.hnhhlearning.com/')
+homeData = s.get(homeUrl)
 homeContent = bs(homeData.content, 'lxml')
 
 
@@ -98,9 +98,12 @@ def pushPercent(sscId, medId):
     pushParams = ctx.call("getObj")
     pushParams['CurrentLength'] = 30
 
-    data = re.search('var mediaTime=.*', courceContent.text)[0]
-    data = re.search('[0-9]*', data)[0]
-    pushParams['CurrentTimespan'] = 3000
+    # data = re.search('var mediaTime=.*', courceContent.text)[0]
+    # data = re.search('[0-9]*', data)[0]
+
+    learnMediaTime =re.search('var learnMediaTime.*', courceContent.text)[0]
+    learnMediaTime=re.search('[0-9]+', learnMediaTime)[0]
+    pushParams['CurrentTimespan'] = learnMediaTime
 
     # 获取pushPercent url
     m = re.search('var timingUrl = ".*?"', courceContent.text)
@@ -119,9 +122,12 @@ def pushPercent(sscId, medId):
     # type == 1 代表持续,类似于心跳...网站这里必须是先开始,然后再发心跳,才能增加进度.所以先要设置成2请求一次,再设置成1持续请求
     pushParams['Type'] = 1
     while (result['Value']['Process'] < 100):
+        pushParams['CurrentTimespan'] = str(int(pushParams['CurrentTimespan'])+30)
         courceData = s.get(pushUrl + 'sscId=' + sscId + '&medId=' + medId, params=pushParams)
         testStr = courceData.text
         result = json.loads(re.search('\((\S*)\)', testStr)[1]);
+        if result['Value'] == None:
+            print('异常' + result['Error'] + '\n' + courceData.request.url)
         print('完成' + str(result['Value']['Process']))
         # requestData =
 
@@ -260,8 +266,8 @@ def login(passId, password):
     loginUrl = 'http://zjpx.hnhhlearning.com/Home/Login/DoHnzjLogin'
     code = getCaptcha(
         'http://zjpx.hnhhlearning.com/Public/Control/GetValidateCode?time=' + str(int(time.time())))
-    account = {'LoginAccount': '41052619900221006X',
-               'LoginPassword': '000000',
+    account = {'LoginAccount': passId,
+               'LoginPassword': password,
                'LoginValCode': code,
                'LoginType': '0',
                'HnzjLoginTab': '0',
@@ -280,8 +286,9 @@ def login(passId, password):
 if __name__ == '__main__':
     login('x', '000000')
 
+    learn()
     # #获取答案
-    getsAnswers()
+    # getsAnswers()
     # #正式考试
     # subExam(True)
 

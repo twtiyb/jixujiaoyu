@@ -43,7 +43,7 @@ def test_db():
         qa1 = Answer(value='正确',question=q1)
         qa2 = Answer(value='错误',question=q1)
 
-        e1 = select(p for p in Exam).first()
+        e1 = select(p for p in Exam if p.testFinish == False).first()
 
         commit()
 

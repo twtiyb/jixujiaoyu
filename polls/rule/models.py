@@ -1,4 +1,9 @@
+import json
 from pony.orm import *
+import logging
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 db = Database()
 db.bind(provider='sqlite', filename='rules.sqlite', create_db=True)
@@ -22,6 +27,7 @@ class RuleRelation(db.Entity):
     t_person = Required(Person, reverse="t_ruleRelations")
     root = Optional('RuleRelation', reverse='root')
 
+
 #
 # class RootNode(db.Entity):
 #     id = PrimaryKey(int, auto=True)
@@ -33,27 +39,6 @@ class RuleRelation(db.Entity):
 db.generate_mapping(create_tables=True)
 sql_debug(True)
 
-@db_session
-def test_basicData():
-    # e1 = select(p for p in Exam).first()
-    # cleanRelation()
-    rule = Rule(name='拣选')
-
-    zhongshuo = Person(name='钟硕')
-    huangjiang = Person(name='黄江')
-    wangze = Person(name='王泽')
-    taozhen = Person(name='陶臻')
-    xuchun = Person(name='徐纯')
-
-    # 简单的授权
-    rootZ = RuleRelation(rule=rule, s_person=zhongshuo, t_person=zhongshuo)
-    # rootZ.root = rootZ
-    z2w = RuleRelation(rule=rule, s_person=zhongshuo, t_person=wangze)
-    w2t = RuleRelation(rule=rule, s_person=wangze, t_person=taozhen)
-    t2x = RuleRelation(rule=rule, s_person=taozhen, t_person=xuchun)
-
-    commit()
-
 
 @db_session
 def cleanData():
@@ -62,6 +47,7 @@ def cleanData():
     db.execute('delete from Person')
     commit()
 
+
 @db_session
 def cleanRelation():
     db.execute('delete from RuleRelation')
@@ -69,15 +55,41 @@ def cleanRelation():
 
 
 @db_session
-def test_basic():
-    commit()
+def saveRootRule(t_person, rule):
+    root = RuleRelation(rule=rule, s_person=t_person, t_person=t_person)
+    flush()
+    root.root = root
 
 
 @db_session
-def test_basic2():
+def saveRule(s_person, t_person, rule):
+    # 获取 授权人 拥有当前 rule 的 trees
+    s_trees = select(p for p in RuleRelation if p.t_person == s_person and p.rule == rule)
+    t_trees = select(p for p in RuleRelation if p.t_person == t_person and p.rule == rule)
+
+    for s in s_trees:
+        # 查看是否已经授权过这颗树
+        if haveSameRule(s, t_trees):
+            continue
+        else:
+            newRule = RuleRelation(rule=rule, s_person=s_person, t_person=t_person)
+            newRule.root = s.root
+            log.info('save ' + s_person.name + ' to ' + t_person.name
+                     + ": " + str(newRule.to_dict())
+                     + ": " + str(s.to_dict()))
     commit()
+
+def haveSameRule(relation, t_trees):
+    for t in t_trees:
+        if t.id == relation.id and t.root == relation.root:
+            return True
+    return False
+
+
+def removeRule(s_person, t_person, rule):
+    log.info('remove ' + s_person.name + ' to ' + t_person.name)
 
 
 # 是否存在相同父节点
 def existsNode(person, lineNode):
-    return True;
+    return True
