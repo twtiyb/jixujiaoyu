@@ -1,3 +1,5 @@
+import threading
+
 import requests
 import execjs
 import re
@@ -29,11 +31,9 @@ s = requests.session()
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36',
     'Referer': 'http://zjpy.hnhhlearning.com/',
-    'Cookie':'ASP.NET_SessionId=ryu3fx4wg31f3vu20lpccxtc;hbjyUsersCookieszjxy.hnhhlearning.com=615|615|2f047a1d01464cb3ac2facd6eb01f3aa; IsLoginUsersCookies_zjxy.hnhhlearning.comzjxy.hnhhlearning.com=IsLogin'
+    'Cookie': 'ASP.NET_SessionId=ryu3fx4wg31f3vu20lpccxtc;hbjyUsersCookieszjxy.hnhhlearning.com=615|615|2f047a1d01464cb3ac2facd6eb01f3aa; IsLoginUsersCookies_zjxy.hnhhlearning.comzjxy.hnhhlearning.com=IsLogin'
 }
 s.headers = headers
-
-
 
 # 登陆到home
 homeData = s.get(homeUrl)
@@ -98,11 +98,8 @@ def pushPercent(sscId, medId):
     pushParams = ctx.call("getObj")
     pushParams['CurrentLength'] = 30
 
-    # data = re.search('var mediaTime=.*', courceContent.text)[0]
-    # data = re.search('[0-9]*', data)[0]
-
-    learnMediaTime =re.search('var learnMediaTime.*', courceContent.text)[0]
-    learnMediaTime=re.search('[0-9]+', learnMediaTime)[0]
+    learnMediaTime = re.search('var learnMediaTime.*', courceContent.text)[0]
+    learnMediaTime = re.search('[0-9]+', learnMediaTime)[0]
     pushParams['CurrentTimespan'] = learnMediaTime
 
     # 获取pushPercent url
@@ -116,19 +113,23 @@ def pushPercent(sscId, medId):
     courceData = s.get(pushUrl + 'sscId=' + sscId + '&medId=' + medId, params=pushParams)
     testStr = courceData.text
     result = json.loads(re.search('\((\S*)\)', testStr)[1]);
-
-    print('完成' + str(result['Value']['Process']))
+    if result['Value'] == None:
+        print(threading.current_thread().getName() + '异常' + result['Error'] + '\n' + courceData.request.url)
+    print(threading.current_thread().getName() + '完成' + str(result['Value']['Process']))
 
     # type == 1 代表持续,类似于心跳...网站这里必须是先开始,然后再发心跳,才能增加进度.所以先要设置成2请求一次,再设置成1持续请求
-    pushParams['Type'] = 1
+    pushParams['Type'] = 2
     while (result['Value']['Process'] < 100):
-        pushParams['CurrentTimespan'] = str(int(pushParams['CurrentTimespan'])+30)
+        pushParams['CurrentTimespan'] = str(int(pushParams['CurrentTimespan']) + 30)
+
+        time.sleep(pushParams['CurrentLength'])
         courceData = s.get(pushUrl + 'sscId=' + sscId + '&medId=' + medId, params=pushParams)
         testStr = courceData.text
         result = json.loads(re.search('\((\S*)\)', testStr)[1]);
         if result['Value'] == None:
-            print('异常' + result['Error'] + '\n' + courceData.request.url)
-        print('完成' + str(result['Value']['Process']))
+            print(threading.current_thread().getName() + '异常' + result['Error'] + '\n' + courceData.request.url)
+            return;
+        print(threading.current_thread().getName() + '完成' + str(result['Value']['Process']))
         # requestData =
 
 
@@ -141,12 +142,14 @@ def learn():
                 print(childCource['子课程名称'] + ':已经学习过,不需要学习')
                 continue
             print(childCource['子课程名称'] + ':开始学习')
-            pushPercent(cource['sscId'], childCource['medId'])
+            threading.Thread(None, target=pushPercent, name=childCource['子课程名称'],
+                             args=(cource['sscId'], childCource['medId'])).start()
+            # pushPercent(cource['sscId'], childCource['medId'])
 
 
 # 从练习记录中获取考试答案,保存到数据库中
 def getsAnswers():
-    answersHomeData = s.get(testHistory,headers = headers)
+    answersHomeData = s.get(testHistory, headers=headers)
     # answersHomeData = s.get(testHistory)
     answersHomeContent = bs(answersHomeData.content, 'lxml')
     for idx, tr in enumerate(answersHomeContent.select("#tabs-1 .listtable tbody tr")):
@@ -239,8 +242,6 @@ def subExam(formalExam=False):
         passTestExam(epaId)
 
 
-
-
 # todo 暂时用别人的服务代替,后续自己架识别服务.
 def getCaptcha(url):
     # 'rb'要加,编码问题
@@ -276,20 +277,19 @@ def login(passId, password):
     response = s.post(loginUrl, params=account)
     response = s.get('http://zjpx.hnhhlearning.com/Public/ShareSso/ToStudy')
 
-    #json.dumps(session.cookies.get_dict()))  # 保存
-    #session.cookies.update(json.loads(f.read()))  # 读取
-    
+    # json.dumps(session.cookies.get_dict()))  # 保存
+    # session.cookies.update(json.loads(f.read()))  # 读取
+
     print('登陆成功' + response.text)
 
 
-
 if __name__ == '__main__':
-    login('x', '000000')
+    login('X', '000000')
 
-    learn()
+    # learn()
     # #获取答案
     # getsAnswers()
     # #正式考试
-    # subExam(True)
+    subExam(True)
 
     print()
